@@ -1,6 +1,11 @@
 ﻿using System.IO.MemoryMappedFiles;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 
 namespace Mapster.Common.MemoryMappedTypes;
 
@@ -14,6 +19,25 @@ namespace Mapster.Common.MemoryMappedTypes;
 /// <returns></returns>
 public delegate bool MapFeatureDelegate(MapFeatureData featureData);
 
+public enum GeographicalTypes: int
+{
+    highway = 0,
+    water,
+    railway,
+    natural,
+    boundary,
+    landuse,
+    residential,
+    farm,
+    reservoir,
+    building,
+    leisure,
+    amenity,
+    name,
+    place,
+    admin_level
+};
+
 /// <summary>
 ///     Aggregation of all the data needed to render a map feature
 /// </summary>
@@ -24,7 +48,7 @@ public readonly ref struct MapFeatureData
     public GeometryType Type { get; init; }
     public ReadOnlySpan<char> Label { get; init; }
     public ReadOnlySpan<Coordinate> Coordinates { get; init; }
-    public Dictionary<string, string> Properties { get; init; }
+    public Dictionary<GeographicalTypes, string> Properties { get; init; }
 }
 
 /// <summary>
@@ -142,6 +166,26 @@ public unsafe class DataFile : IDisposable
         GetString(stringsOffset, charsOffset, i + 1, out value);
     }
 
+    public static string[] geographicalTypeList =
+    {
+        "highway",
+        "water",
+        "railway",
+        "natural",
+        "boundary",
+        "landuse",
+        "residential",
+        "farm",
+        "reservoir",
+        "building",
+        "leisure",
+        "amenity",
+        "name",
+        "place",
+        "admin_level"
+
+    };
+
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     public void ForeachFeature(BoundingBox b, MapFeatureDelegate? action)
     {
@@ -181,11 +225,18 @@ public unsafe class DataFile : IDisposable
 
                 if (isFeatureInBBox)
                 {
-                    var properties = new Dictionary<string, string>(feature->PropertyCount);
+                    var properties = new Dictionary<GeographicalTypes, string>(feature->PropertyCount);
                     for (var p = 0; p < feature->PropertyCount; ++p)
                     {
                         GetProperty(header.Tile.Value.StringsOffsetInBytes, header.Tile.Value.CharactersOffsetInBytes, p * 2 + feature->PropertiesOffset, out var key, out var value);
-                        properties.Add(key.ToString(), value.ToString());
+
+                        if (!geographicalTypeList.Contains(key.ToString())) //check if geographicalTypeList enum contains the properties key
+                        {
+                            continue;
+                        }
+
+                        GeographicalTypes gtKey = (GeographicalTypes)Enum.Parse(typeof(GeographicalTypes), key.ToString());
+                        properties.Add(gtKey, value.ToString());
                     }
 
                     if (!action(new MapFeatureData
